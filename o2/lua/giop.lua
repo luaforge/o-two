@@ -5,8 +5,9 @@
 require "idl.lua"
 require "cdr.lua"
 require "address.lua"
-require "luasocket"
+require "/home/rmello/lua-5.0-plus/luasocket/luasocket.lua"
 
+--O2Socket = _G
 O2Socket = socket
 GIOP = {}
 
@@ -186,13 +187,11 @@ local open_connection = function (host, port)
   local sq = connections[key]
   if sq then
     verb( 4, "Found connection in cache.")
-    pr( connections )
     -- ok, return this socket, it's all good
     return sq 
   end
   -- otherwise, establish new connection
   local err
-  
   sq, err = O2Socket.connect(host, port)
   err = err or 'no'
   assert(sq, err.." connecting to "..host..":"..port)
@@ -200,11 +199,9 @@ local open_connection = function (host, port)
   return sq
 end
 
-local close_connection = function (sock)
+local close_connection = function (socket)
   -- por enquanto fechando a cada pedido! refazer qdo passarmos pra 5.0!
-  --rmello: se fecharmos o socket aqui, ele vai continuar nao nulo na tabela e 
-  -- pode gerar segmentation fault. ?Bug in luasocket 2.0 alpha ?
- --sock:close()
+ --close(socket)
 end
 
 function GIOP.call (obj, method, args, sig)
@@ -220,7 +217,7 @@ function GIOP.call (obj, method, args, sig)
   local sq, reply, err
 
   repeat 
-    local sq = open_connection(iobj.host, iobj.port)
+    sq = open_connection(iobj.host, iobj.port)
     
     -- Changed in luasocket 2.0alpha .. change again in beta ?
     if( O2Socket == socket ) then
@@ -235,7 +232,7 @@ function GIOP.call (obj, method, args, sig)
   -- shouldn't get stuck in infinite retries here.
   until err ~= "closed"
   
-  --close_connection(sq)
+  close_connection(sq)
 
   local reply_h = CDR.get(reply, GIOP.MessageHeader_1_0)   -- message header
   if reply_h.message_type ~= 1 then   -- is it not a reply?
@@ -372,13 +369,18 @@ local create_reply = function (sig, res, rn, req_id, except_type)
   CDR.set(state, Reply, GIOP.ReplyHeader_1_0)
   local res_idx = 0
 
+--print("header:",string.len(state.s), IDL.tohexa(state.s))
+  --print(string.format("res[1]: %s, getn(res): %d, result: %s, getn(params_out): d\n",
+    --type(res[1]), table.getn(res), sig.result._type, table.getn(sig.params_out)))
+
   -- this should be done if sig.result is not void. Sometimes
   -- we have results (out parameters) for void functions.
+  --if res[1] ~= nil then
   verb( 7, 'marshalling this kind of result:' )
-  verb_pr( 7, sig.result )
+  if VERB_LEVEL >= 7 then pr( sig.result ) end
   if sig.result ~= IDL.void then
     res_idx = res_idx + 1
-    verb_pr( 8, res[res_idx] )
+    if VERB_LEVEL >= 8 then pr( res[res_idx] ) end
     marshal(state, res[res_idx], sig.result)
   end
 
