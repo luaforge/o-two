@@ -1,0 +1,10 @@
+#ifndef O2TEST_IDL
+#define O2TEST_IDL
+
+module AppTest
+{
+  interface Testing {
+    void say(in string text);
+  };
+};
+#endif
